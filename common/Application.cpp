@@ -2,20 +2,46 @@
 #include <iostream>
 
 Application::Application(int w, int h, const char* title, int style, sf::ContextSettings setting)
+    :_isRunning(false)
+    ,_isInitGL(false)
 {
-    _isRunning = false;
     initWindow(w, h, title, style, setting);
+    initContext();
+}
+
+Application::Application(int w, int h, const char* title)
+    :_isRunning(false)
+    ,_isInitGL(false)
+{
+    initWindow(w, h, title);
+    initContext();
+}
+
+Application::Application() 
+    :_isRunning(false)
+    ,_isInitGL(false)
+    ,_window(nullptr)
+{
+}
+
+Application::~Application()
+{
+    delete _window;
+    _window = nullptr;
 }
 
 void Application::initWindow(int w, int h, const char* title /* = "Window" */, int style /* = sf::Style::Default */, sf::ContextSettings setting)
 {
-    _window.create(sf::VideoMode(w, h), title, style, setting);
-    _window.setVerticalSyncEnabled(true);
-    _window.setFramerateLimit(60);
+    _window = new sf::Window(sf::VideoMode(w, h), title, style, setting);
+    _window->setVerticalSyncEnabled(true);
+    _window->setFramerateLimit(60);
 }
 
-void Application::initContext(FUNC_V func1, FUNC_V func2)
+void Application::initContext()
 {
+    if (_isInitGL)
+        return;
+
     glewExperimental = true;
     if (GLEW_OK != glewInit())
     {
@@ -23,34 +49,59 @@ void Application::initContext(FUNC_V func1, FUNC_V func2)
         return;
     }
 
-    _initFunc = func1;
-    _displayFunc = func2;
+    _isInitGL = true;
 
-    glViewport(0, 0, _window.getSize().x, _window.getSize().y);
+    auto size = _window->getSize();
+    glViewport(0, 0, size.x, size.y);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glEnable(GL_DEPTH_TEST);
 }
 
-void Application::start()
+void Application::initContext(FUNC_V initFunc, FUNC_V displayFunc)
 {
-    _isRunning = true;
+    this->initContext();
+    this->setInitFunc(initFunc);
+    this->setDisplayFunc(displayFunc);
+}
+
+void Application::init()
+{
     if (_initFunc)
         _initFunc();
 }
 
+void Application::display()
+{
+    if (_displayFunc)
+        _displayFunc();
+    _window->display();
+}
+
+void Application::start()
+{
+    if (_window == nullptr || !_isInitGL)
+        return;
+
+    _isRunning = true;
+    this->init();
+}
+
 bool Application::update()
 {
-    if (!_window.isOpen())
+    if (_window == nullptr || !_isInitGL)
+        return false;
+
+    if (!_window->isOpen())
         return false;
 
     sf::Event evt;
-    while (_window.pollEvent(evt))
+    while (_window->pollEvent(evt))
     {
         sf::Event::EventType type = evt.type;
         switch (type)
         {
         case sf::Event::Closed:
-            _window.close();
+            _window->close();
             break;
         case sf::Event::Resized:
             onResize(evt.size.width, evt.size.height);
@@ -102,10 +153,7 @@ bool Application::update()
         }
     }
 
-    if (_displayFunc)
-        _displayFunc();
-
-    _window.display();
+    this->display();
 
     return true;
 }
@@ -124,8 +172,6 @@ void Application::onResize(unsigned int w, unsigned int h)
 {
     glViewport(0, 0, w, h);
 
-    if (_displayFunc)
-        _displayFunc();
-    _window.display();
+    this->display();
 }
 
